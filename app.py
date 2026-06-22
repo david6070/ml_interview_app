@@ -1,5 +1,6 @@
 import streamlit as st
 from google import genai
+from google.genai import errors
 import streamlit.components.v1 as components
 import os
 import re
@@ -8,8 +9,10 @@ from dotenv import load_dotenv
 # --- Initialization & Secrets ---
 load_dotenv()
 try:
+    # Try grabbing from Streamlit Cloud's vault first
     api_key = st.secrets["GEMINI_API_KEY"] 
 except FileNotFoundError:
+    # Fallback to local .env file if running on your machine
     api_key = os.getenv("GEMINI_API_KEY")
 
 client = genai.Client(api_key=api_key)
@@ -97,13 +100,13 @@ if 'question' not in st.session_state:
     st.session_state.user_score = None
     st.session_state.user_feedback = None
 
-# Generate Question Button
+# --- Generate Question Logic ---
 if st.button("Start Interview Question", type="primary"):
     with st.spinner("The interviewer is preparing your question..."):
-        raw_output = generate_qa(topic, difficulty)
-        
         try:
-            # We use Regex (re) to safely split the text just in case the AI formats it slightly weirdly
+            raw_output = generate_qa(topic, difficulty)
+            
+            # We use Regex (re) to safely split the text
             q_match = re.search(r"QUESTION:\s*(.*?)\s*---", raw_output, re.DOTALL)
             a_match = re.search(r"ANSWER:\s*(.*)", raw_output, re.DOTALL)
             
@@ -113,6 +116,9 @@ if st.button("Start Interview Question", type="primary"):
             # Clear previous grades when a new question is asked
             st.session_state.user_score = None
             st.session_state.user_feedback = None
+            
+        except errors.ClientError:
+            st.warning("⏳ **Speed Limit Hit!** The AI interviewer is currently talking to too many candidates. Please wait 60 seconds and try again.")
         except Exception as e:
             st.error("There was an issue formatting the question. Please try generating again.")
 
@@ -133,15 +139,18 @@ if st.session_state.question:
                 st.warning("You can't just stare blankly at the interviewer! Type an answer.")
             else:
                 with st.spinner("The interviewer is evaluating your response..."):
-                    grade_raw = grade_response(st.session_state.question, st.session_state.ideal_answer, user_response)
-                    
                     try:
+                        grade_raw = grade_response(st.session_state.question, st.session_state.ideal_answer, user_response)
+                        
                         score_match = re.search(r"SCORE:\s*(.*?)\s*---", grade_raw, re.DOTALL)
                         feedback_match = re.search(r"FEEDBACK:\s*(.*)", grade_raw, re.DOTALL)
                         
                         st.session_state.user_score = score_match.group(1).strip() if score_match else "N/A"
                         st.session_state.user_feedback = feedback_match.group(1).strip() if feedback_match else grade_raw
                         st.rerun() # Force a UI refresh to hide the timer and show the grade
+                        
+                    except errors.ClientError:
+                        st.warning("⏳ **Speed Limit Hit!** The AI is currently overloaded grading other candidates. Please wait 60 seconds and hit submit again.")
                     except Exception as e:
                         st.error("Failed to parse the grade. Try submitting again.")
 
