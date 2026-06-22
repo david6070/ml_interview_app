@@ -2,6 +2,7 @@ import streamlit as st
 from google import genai
 import os
 from dotenv import load_dotenv
+import re  # <--- Add this line right here!
 
 # Load local .env file (for when you run it on your own Mac)
 load_dotenv()
