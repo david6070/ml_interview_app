@@ -2,16 +2,20 @@ import streamlit as st
 from google import genai
 import os
 from dotenv import load_dotenv
-import time
-import random
-import re
-import json
 
-# Load API key from the .env file
+# Load local .env file (for when you run it on your own Mac)
 load_dotenv()
 
-# Initialize the NEW GenAI client
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Safely grab the API key whether we are online or local
+try:
+    # This is where Streamlit Cloud stores secrets
+    api_key = st.secrets["GEMINI_API_KEY"] 
+except FileNotFoundError:
+    # Fallback to local .env file
+    api_key = os.getenv("GEMINI_API_KEY")
+
+# Initialize the GenAI client
+client = genai.Client(api_key=api_key)
 
 def generate_local_qa(topic, difficulty):
     """Return a safe offline fallback Q/A when the model is unavailable."""
